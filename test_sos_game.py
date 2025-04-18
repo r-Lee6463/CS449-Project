@@ -1,112 +1,124 @@
 import unittest
 import tkinter as tk
-from tkinter import messagebox
-from sos_game_gui import SOSGameGUI  # Make sure to import your actual module here
+from sos_game_gui import SOSGameGUI
+
 
 class TestSOSGameGUI(unittest.TestCase):
     def setUp(self):
-        """Set up the test case by initializing the Tkinter root and game GUI."""
+        """Initialize the Tkinter root and game GUI with a 3x3 board for tests."""
         self.root = tk.Tk()
         self.game = SOSGameGUI(self.root)
-        # Set the board size to 3x3 for testing
-        
+        self.game.board_size_var.set(3)
+        self.game._start_new_game()
+
     def tearDown(self):
         """Destroy the Tkinter root after each test."""
         self.root.destroy()
 
     def test_choose_board_size(self):
-        """Test changing the board size updates the board correctly."""
-        # Simulating a change in board size (via the OptionMenu)
-        self.game.board_size_var.set(6)  # Select board size 6
-        self.game._start_new_game()  # Reinitialize the game with the new board size
-        self.assertEqual(self.game.n, 6, "Board size should update to 6.")
-        self.assertEqual(len(self.game.buttons), 6, "Board should have 6 rows.")
-        self.assertEqual(len(self.game.buttons[0]), 6, "Board should have 6 columns.")
+        """Board size selector updates the grid dimensions correctly."""
+        self.game.board_size_var.set(6)
+        self.game._start_new_game()
+        self.assertEqual(self.game.n, 6)
+        self.assertEqual(len(self.game.buttons), 6)
+        self.assertEqual(len(self.game.buttons[0]), 6)
 
     def test_choose_game_mode(self):
-        """Test selecting a game mode updates the variable correctly."""
-        # Changing the game mode
-        self.game.game_mode_var.set("General")  # Select 'General' mode
-        self.game._start_new_game()  # Reinitialize the game with the selected game mode
-        self.assertEqual(self.game.game_mode_var.get(), "General", "Game mode should be set to General.")
+        """Game mode selector updates correctly."""
+        self.game.game_mode_var.set("General")
+        self.game._start_new_game()
+        self.assertEqual(self.game.game_mode_var.get(), "General")
+        self.game.game_mode_var.set("Simple")
+        self.game._start_new_game()
+        self.assertEqual(self.game.game_mode_var.get(), "Simple")
 
-        self.game.game_mode_var.set("Simple")  # Select 'Simple' mode
-        self.game._start_new_game()  # Reinitialize the game with the selected game mode
-        self.assertEqual(self.game.game_mode_var.get(), "Simple", "Game mode should be set to Simple.")
+    def test_make_move_simple(self):
+        """Making a move in Simple mode places the correct letter."""
+        self.game.game_mode_var.set("Simple")
+        self.game._start_new_game()
+        self.game.blue_letter.set("S")
+        self.game.make_move(0, 0)
+        self.assertEqual(self.game.buttons[0][0]["text"], "S")
 
-    def test_make_move_simple_game(self):
-        """Test making a move in a simple game."""
-        self.game.game_mode_var.set("Simple")  # Set game mode to Simple
-        self.game._start_new_game()  # Reinitialize the game
-        self.game.make_move(0, 0)  # Make a move at (0, 0)
-        self.assertIn(self.game.buttons[0][0]["text"], ["S", "O"], "Cell should contain an S or O after a move.")
-
-    def test_make_move_general_game(self):
-        """Test making a move in a general game."""
-        self.game.game_mode_var.set("General")  # Set game mode to General
-        self.game._start_new_game()  # Reinitialize the game
-        self.game.make_move(1, 1)  # Make a move at (1, 1)
-        self.assertIn(self.game.buttons[1][1]["text"], ["S", "O"], "Cell should contain an S or O after a move.")
+    def test_make_move_general(self):
+        """Making a move in General mode places the correct letter."""
+        self.game.game_mode_var.set("General")
+        self.game._start_new_game()
+        self.game.blue_letter.set("O")
+        self.game.make_move(1, 1)
+        self.assertEqual(self.game.buttons[1][1]["text"], "O")
 
     def test_start_new_game(self):
-        """Test starting a new game with the chosen board size and game mode."""
-        self.game.board_size_var.set(6)  # Set board size to 6
-        self.game.game_mode_var.set("General")  # Set game mode to General
-        self.game._start_new_game()  # Start a new game
+        """Start New Game resets to selected board size and mode."""
+        self.game.board_size_var.set(4)
+        self.game.game_mode_var.set("General")
+        self.game._start_new_game()
+        self.assertEqual(self.game.n, 4)
+        self.assertEqual(self.game.game_mode_var.get(), "General")
 
-        # Assert the correct board size and game mode have been applied
-        self.assertEqual(self.game.n, 6, "Board size should be 6.")
-        self.assertEqual(self.game.game_mode_var.get(), "General", "Game mode should be General.")
-
-    def test_simple_game(self):
-        """Test making moves in a simple game and ensuring the board is filled."""
-        self.game.game_mode_var.set("Simple")  # Set game mode to Simple
-        self.game._start_new_game()  # Reinitialize the game
-
-        # Simulate moves to fill the board with 'S'
+    def test_simple_game_over(self):
+        """Simple mode ends when the board is full."""
+        self.game.game_mode_var.set("Simple")
+        self.game._start_new_game()
+        # Fill every cell (all “S”)
         for i in range(self.game.n):
             for j in range(self.game.n):
-                # Fill each cell with 'S'
-                self.game.make_move(i, j)  # Make the move at position (i, j)
-                self.assertEqual(self.game.buttons[i][j]["text"], "S", 
-                                f"Cell ({i}, {j}) should contain 'S' after the move.")
-
-        # Check that the board is full of 'S'
-        full_board = True
-        for i in range(self.game.n):
-            for j in range(self.game.n):
-                if self.game.buttons[i][j]["text"] != "S":
-                    full_board = False
-                    break
-            if not full_board:
-                break
-
-        self.assertTrue(full_board, "The board should be full with 'S'.")
+                self.game.make_move(i, j)
+        self.assertTrue(self.game.logic.check_game_over())
 
     def test_general_game_over(self):
-        """Test making moves in a general game and ensuring the board is filled."""
-        self.game.game_mode_var.set("General")  # Set game mode to General
-        self.game._start_new_game()  # Reinitialize the game
-
-        # Simulate moves to fill the board with 'S'
+        """General mode ends when the board is full."""
+        self.game.game_mode_var.set("General")
+        self.game._start_new_game()
+        # Fill board without forming SOS
         for i in range(self.game.n):
             for j in range(self.game.n):
-                # Fill each cell with 'S'
-                self.game.make_move(i, j)  # Make the move at position (i, j)
-                self.assertEqual(self.game.buttons[i][j]["text"], "S", 
-                                f"Cell ({i}, {j}) should contain 'S' after the move.")
+                self.game.blue_letter.set("S")
+                self.game.make_move(i, j)
+        self.assertTrue(self.game.logic.check_game_over())
 
-        # Check that the board is full of 'S'
-        full_board = True
-        for i in range(self.game.n):
-            for j in range(self.game.n):
-                if self.game.buttons[i][j]["text"] != "S":
-                    full_board = False
-                    break
-            if not full_board:
-                break
+    # ---- Computer Opponent Tests ----
+    def test_computer_move_makes_progress(self):
+        """Computer move reduces the number of empty cells."""
+        self.game.blue_type.set("Computer")
+        self.game.board_size_var.set(3)
+        self.game._start_new_game()
+        empties_before = sum(
+            1 for i in range(self.game.n) for j in range(self.game.n)
+            if self.game.logic.board[i][j] == ""
+        )
+        self.game._computer_move()
+        empties_after = sum(
+            1 for i in range(self.game.n) for j in range(self.game.n)
+            if self.game.logic.board[i][j] == ""
+        )
+        self.assertLess(empties_after, empties_before)
 
-        self.assertTrue(full_board, "The board should be full with 'S'.")
+    def test_human_locked_during_computer_turn(self):
+        """Human cannot place a letter when it's computer's turn."""
+        self.game.blue_type.set("Computer")
+        self.game.board_size_var.set(3)
+        self.game._start_new_game()
+        # Attempt human move on computer's turn
+        self.game.make_move(0, 0)
+        self.assertEqual(self.game.buttons[0][0]["text"], "")
+
+    def test_chained_computer_moves(self):
+        """Two computer players make two moves in sequence without human intervention."""
+        self.game.blue_type.set("Computer")
+        self.game.red_type.set("Computer")
+        self.game.board_size_var.set(3)
+        self.game._start_new_game()
+        # First computer move
+        self.game._computer_move()
+        # Second computer move (after turn switch)
+        self.game._computer_move()
+        moves_count = sum(
+            1 for i in range(self.game.n) for j in range(self.game.n)
+            if self.game.logic.board[i][j] != ""
+        )
+        self.assertGreaterEqual(moves_count, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
