@@ -1,321 +1,255 @@
-"""CS449 Ryan Lee 3/27/25; Developed and tested in conjuncture with ChatGPT (model GPT-4o and GPT-4o mini) following Google's Python Style Guide."""
-
+"""CS449 Ryan Lee 4/17/25; Developed and tested in conjuncture with ChatGPT (o4-mini-high) following Google's Python Style Guide."""
 import tkinter as tk
 from tkinter import messagebox
+import random
 
 
-# Base class for handling common game logic
 class BaseGame:
+    """Handles the core SOS game logic."""
     def __init__(self, board_size, game_mode):
         self.board_size = board_size
         self.game_mode = game_mode
         self.board = [["" for _ in range(board_size)] for _ in range(board_size)]
         self.current_player = "Blue"
+        self.total_moves = 0
         self.blue_points = 0
         self.red_points = 0
-        self.total_moves = 0
 
     def reset_board(self):
         self.board = [["" for _ in range(self.board_size)] for _ in range(self.board_size)]
         self.current_player = "Blue"
+        self.total_moves = 0
         self.blue_points = 0
         self.red_points = 0
-        self.total_moves = 0
 
     def switch_player(self):
+        """Switches turn to the other player."""
         self.current_player = "Red" if self.current_player == "Blue" else "Blue"
 
-    def award_points(self, points):
-        """Awards points to the current player."""
-        if self.current_player == "Blue":
-            self.blue_points += points
-        else:
-            self.red_points += points
-
-    def check_game_over(self):
-        """Checks if the game is over based on the current game mode."""
-        raise NotImplementedError
-
-    def get_winner(self):
-        """Determines the winner of the game."""
-        raise NotImplementedError
-
-
-# Specialized class for SOS game logic
-class SOSGameLogic(BaseGame):
-    def __init__(self, board_size, game_mode):
-        super().__init__(board_size, game_mode)
-
     def make_move(self, row, col, letter):
+        """Attempts to place a letter; returns True if successful."""
         if self.board[row][col] == "":
             self.board[row][col] = letter
             self.total_moves += 1
-            points_awarded = self.check_for_sos(row, col, letter)
-            if points_awarded:
-                self.award_points(points_awarded)
-                return f"{points_awarded} SOS's formed"
+            # Award points for SOS sequences formed
+            sequences = self.check_for_sos(row, col)
+            if sequences:
+                points = len(sequences)
+                if self.current_player == "Blue":
+                    self.blue_points += points
+                else:
+                    self.red_points += points
             return True
         return False
 
-    def check_for_sos(self, row, col, letter):
-        """Checks if placing a letter at (row, col) forms an SOS."""
-        directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-        points_awarded = 0
+    def check_for_sos(self, row, col):
+        """Returns list of SOS sequences formed by the last move."""
+        sequences = []
+        directions = [(-1, -1), (-1, 0), (-1, 1),
+                      (0, -1),           (0, 1),
+                      (1, -1),  (1, 0),  (1, 1)]
+        letter = self.board[row][col]
         for dr, dc in directions:
-            if self.is_sos(row, col, dr, dc, letter):
-                points_awarded += 1
-        return points_awarded
-
-    def is_sos(self, row, col, dr, dc, letter):
-        """Checks if an SOS pattern is formed in a specific direction."""
-        try:
-            if letter == "S":
-                if self.board[row][col] == "S" and self.board[row + dr][col + dc] == "O" and self.board[row + 2 * dr][col + 2 * dc] == "S":
-                    return True
-            elif letter == "O":
-                if self.board[row - dr][col - dc] == "S" and self.board[row][col] == "O" and self.board[row + dr][col + dc] == "S":
-                    return True
-                if self.board[row + dr][col + dc] == "S" and self.board[row][col] == "O" and self.board[row - dr][col - dc] == "S":
-                    return True
-        except IndexError:
-            return False
-        return False
+            r1, c1 = row - dr, col - dc
+            r2, c2 = row + dr, col + dc
+            if (0 <= r1 < self.board_size and 0 <= c1 < self.board_size and
+                0 <= r2 < self.board_size and 0 <= c2 < self.board_size):
+                if letter == 'O':
+                    if self.board[r1][c1] == 'S' and self.board[r2][c2] == 'S':
+                        sequences.append([(r1, c1), (row, col), (r2, c2)])
+                elif letter == 'S':
+                    r3, c3 = row + dr, col + dc
+                    r4, c4 = row + 2*dr, col + 2*dc
+                    if (0 <= r3 < self.board_size and 0 <= c3 < self.board_size and
+                        0 <= r4 < self.board_size and 0 <= c4 < self.board_size and
+                        self.board[r3][c3] == 'O' and self.board[r4][c4] == 'S'):
+                        sequences.append([(row, col), (r3, c3), (r4, c4)])
+                    r3b, c3b = row - dr, col - dc
+                    r4b, c4b = row - 2*dr, col - 2*dc
+                    if (0 <= r3b < self.board_size and 0 <= c3b < self.board_size and
+                        0 <= r4b < self.board_size and 0 <= c4b < self.board_size and
+                        self.board[r3b][c3b] == 'O' and self.board[r4b][c4b] == 'S'):
+                        sequences.append([(r4b, c4b), (r3b, c3b), (row, col)])
+        # Deduplicate
+        unique, seen = [], set()
+        for seq in sequences:
+            key = tuple(sorted(seq))
+            if key not in seen:
+                seen.add(key)
+                unique.append(seq)
+        return unique
 
     def check_game_over(self):
-        """Checks if the game is over based on the current game mode."""
+        """Returns True if the game should end."""
         if self.game_mode == "Simple":
             if self.blue_points > 0 or self.red_points > 0:
                 return True
-            elif self.total_moves == self.board_size ** 2:
-                return True
-        elif self.game_mode == "General":
-            if self.total_moves == self.board_size ** 2:
-                return True
-        return False
+            return self.total_moves == self.board_size ** 2
+        return self.total_moves == self.board_size ** 2
 
     def get_winner(self):
-        """Determines the winner of the game."""
+        """Determines and returns the winner or 'Draw'."""
         if self.game_mode == "Simple":
             if self.blue_points > 0:
                 return "Blue"
-            elif self.red_points > 0:
+            if self.red_points > 0:
                 return "Red"
-            else:
-                return "Draw"
-        elif self.game_mode == "General":
-            if self.blue_points > self.red_points:
-                return "Blue"
-            elif self.red_points > self.blue_points:
-                return "Red"
-            else:
-                return "Draw"
-
-
-# Base class for GUI handling
-class BaseGUI:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("SOS Game")
-        self.logic = None
-        self.turn_label = None
-        self.score_label = None
-        self.board_frame = None
-
-    def _create_widgets(self):
-        """Create common GUI widgets like score labels, and turn labels."""
-        self.turn_label = tk.Label(self.root, text="", font=("Arial", 14))
-        self.turn_label.pack()
-
-        self.score_label = tk.Label(self.root, text="", font=("Arial", 12))
-        self.score_label.pack(pady=10)
-
-    def _create_board(self):
-        """Create the game board, to be overridden by specific games."""
-        raise NotImplementedError
-
-    def make_move(self, row, col):
-        """Handles making a move, to be overridden by specific games."""
-        raise NotImplementedError
-
-    def highlight_sos(self, row, col, letter):
-        """Highlights the SOS in the turn player's color, to be overridden by specific games."""
-        raise NotImplementedError
-
-    def end_game(self):
-        """End game, to be overridden by specific games."""
-        raise NotImplementedError
+            return "Draw"
+        if self.blue_points > self.red_points:
+            return "Blue"
+        if self.red_points > self.blue_points:
+            return "Red"
+        return "Draw"
 
 
 class SOSGameGUI:
     """GUI for the SOS game using Tkinter."""
     def __init__(self, root):
-        self.awarded_sos = set()  # Set to track awarded SOS sequences
         self.root = root
         self.root.title("SOS Game")
 
-        self.n = 8 # Max board size
-        self.board = [["" for _ in range(self.n)] for _ in range(self.n)]  # Initialize an empty board
-        self.game_mode = "Simple"
-        self.logic = SOSGameLogic(self.n, self.game_mode)
-        self.blue_letter_choice = tk.StringVar(value="S")
-        self.red_letter_choice = tk.StringVar(value="S")
-        self.board_size_var = tk.IntVar(value=5)  # Default value for board size
+        # UI Variables
+        self.board_size_var = tk.IntVar(value=5)
         self.game_mode_var = tk.StringVar(value="Simple")
+        self.blue_letter = tk.StringVar(value="S")
+        self.red_letter = tk.StringVar(value="S")
+        self.blue_type = tk.StringVar(value="Human")
+        self.red_type = tk.StringVar(value="Human")
+
+        # Game logic and state
+        self.logic = None
+        self.n = 0
+        self.buttons = []
+        self.game_active = False
 
         self._create_widgets()
         self._start_new_game()
 
     def _create_widgets(self):
-        self.turn_label = tk.Label(self.root, text=f"{self.logic.current_player} Player's Turn", font=("Arial", 14))
-        self.turn_label.pack()
+        # Turn label
+        self.turn_label = tk.Label(self.root, text="", font=("Arial", 14))
+        self.turn_label.pack(pady=5)
 
-        self._create_board_size_selector()  # Add board size selector to the GUI
-        self._create_game_mode_selector()
+        # Control frame
+        ctrl = tk.Frame(self.root)
+        ctrl.pack(pady=5)
+        tk.Label(ctrl, text="Board Size:").pack(side=tk.LEFT)
+        tk.OptionMenu(ctrl, self.board_size_var, *range(3, 9)).pack(side=tk.LEFT)
+        tk.Label(ctrl, text="Game Mode:").pack(side=tk.LEFT, padx=(10,0))
+        tk.Radiobutton(ctrl, text="Simple", variable=self.game_mode_var, value="Simple").pack(side=tk.LEFT)
+        tk.Radiobutton(ctrl, text="General", variable=self.game_mode_var, value="General").pack(side=tk.LEFT)
 
-        self.score_label = tk.Label(self.root, text=f"Blue: {self.logic.blue_points} | Red: {self.logic.red_points}", font=("Arial", 12))
-        self.score_label.pack(pady=10)
-
-        # Initialize main_frame here, before using it
+        # Main frame: player options and board
         self.main_frame = tk.Frame(self.root)
-        self.main_frame.pack()
+        self.main_frame.pack(pady=10)
 
-        self._create_player_options("left", "Blue")
-        self._create_board()
-        self._create_player_options("right", "Red")
+        self.left_frame = tk.Frame(self.main_frame)
+        self.left_frame.pack(side=tk.LEFT, padx=20)
+        self._create_player_options(self.left_frame, "Blue")
 
-        self.new_game_button = tk.Button(self.root, text="New Game", command=lambda: [self._start_new_game(), self._start_new_game()])
-        self.new_game_button.pack(pady=10)
-
-    def _create_board_size_selector(self):
-        size_frame = tk.Frame(self.root)
-        size_frame.pack()
-        tk.Label(size_frame, text="Board Size: ").pack(side=tk.LEFT)
-        # Update this to change board size when selected
-        tk.OptionMenu(size_frame, self.board_size_var, *range(3, 9)).pack(side=tk.LEFT)
-
-    def _create_game_mode_selector(self):
-        mode_frame = tk.Frame(self.root)
-        mode_frame.pack()
-        tk.Label(mode_frame, text="Game Mode: ").pack(side=tk.LEFT)
-        tk.Radiobutton(mode_frame, text="Simple", variable=self.game_mode_var, value="Simple").pack(side=tk.LEFT)
-        tk.Radiobutton(mode_frame, text="General", variable=self.game_mode_var, value="General").pack(side=tk.LEFT)
-
-    def _create_board(self):
-        # Ensure the board size is taken from the selected value
-        self.n = self.board_size_var.get()
-        if hasattr(self, "board_frame") and self.board_frame is not None:
-            self.board_frame.destroy()  # Only destroy if the frame already exists
         self.board_frame = tk.Frame(self.main_frame)
-        self.board_frame.pack()
-        self.buttons = [[None for _ in range(self.n)] for _ in range(self.n)]
+        self.board_frame.pack(side=tk.LEFT)
 
+        self.right_frame = tk.Frame(self.main_frame)
+        self.right_frame.pack(side=tk.LEFT, padx=20)
+        self._create_player_options(self.right_frame, "Red")
+
+        # New Game button
+        tk.Button(self.root, text="New Game", command=self._start_new_game).pack(pady=10)
+
+    def _create_player_options(self, parent, player):
+        tk.Label(parent, text=f"{player} Player", font=("Arial",10,'bold')).pack(pady=(0,5))
+        var = self.blue_letter if player=='Blue' else self.red_letter
+        tk.Radiobutton(parent, text="S", variable=var, value="S").pack(anchor='w')
+        tk.Radiobutton(parent, text="O", variable=var, value="O").pack(anchor='w')
+        tvar = self.blue_type if player=='Blue' else self.red_type
+        tk.Radiobutton(parent, text="Human", variable=tvar, value="Human").pack(anchor='w')
+        tk.Radiobutton(parent, text="Computer", variable=tvar, value="Computer").pack(anchor='w')
+
+    def _get_player_type(self, player):
+        return self.blue_type.get() if player == 'Blue' else self.red_type.get()
+
+    def _start_new_game(self):
+        # Initialize logic
+        self.n = self.board_size_var.get()
+        self.logic = BaseGame(self.n, self.game_mode_var.get())
+        self.logic.reset_board()
+        self.game_active = True
+
+        self.turn_label.config(text=f"{self.logic.current_player} Player's Turn")
+
+        # Clear board frame
+        for widget in self.board_frame.winfo_children():
+            widget.destroy()
+
+        # Build new grid of buttons
+        self.buttons = [[None]*self.n for _ in range(self.n)]
         for i in range(self.n):
             for j in range(self.n):
-                btn = tk.Button(
-                    self.board_frame,
-                    text="",
-                    width=4,
-                    height=2,
-                    command=lambda row=i, col=j: self.make_move(row, col),
-                )
+                btn = tk.Button(self.board_frame, text="", width=4, height=2,
+                                command=lambda r=i,c=j: self.make_move(r,c))
                 btn.grid(row=i, column=j)
                 self.buttons[i][j] = btn
 
-    def _set_game_mode(self):
-        self.logic.game_mode = self.game_mode_var.get()  # Update the game mode in the logic
-
-    def _start_new_game(self):
-        """Starts a new game with a fresh board."""
-        # Reset the game logic and board size
-        self.logic = SOSGameLogic(self.n, self.game_mode_var.get())  # Update game logic with the new board size and mode
-        self.logic.reset_board()
-
-        # Reset the UI to reflect the new game
-        self.turn_label.config(text=f"{self.logic.current_player} Player's Turn")
-        self.score_label.config(text=f"Blue: {self.logic.blue_points} | Red: {self.logic.red_points}")
-
-        # Reset all buttons on the board
-        for i in range(self.n):
-            for j in range(self.n):
-                self.buttons[i][j].config(text="", bg="SystemButtonFace")
-
-        # Reinitialize the board frame (if needed) to reflect the new board size
-        self._create_board()
-
-    def _create_player_options(self, side, player):
-        """Create the options for each player."""
-        frame = tk.Frame(self.main_frame)
-        frame.pack(side=side, padx=10)
-        letter_choice_var = self.blue_letter_choice if player == "Blue" else self.red_letter_choice
-        tk.Label(frame, text=f"{player} Player:").pack()
-        tk.Label(frame, text="Choose Letter:").pack()
-        tk.Radiobutton(frame, text="S", variable=letter_choice_var, value="S").pack()
-        tk.Radiobutton(frame, text="O", variable=letter_choice_var, value="O").pack()
+        # If computer goes first, schedule move
+        if self._get_player_type(self.logic.current_player) == 'Computer':
+            self.root.after(500, self._computer_move)
 
     def make_move(self, row, col):
-        letter = self.blue_letter_choice.get() if self.logic.current_player == "Blue" else self.red_letter_choice.get()
-        result = self.logic.make_move(row, col, letter)
-        if result:
-            self.buttons[row][col]["text"] = letter
-            self.highlight_sos(row, col, letter)
-            self.logic.switch_player()
-            self.turn_label.config(text=f"{self.logic.current_player} Player's Turn")
-            self.score_label.config(text=f"Blue: {self.logic.blue_points} | Red: {self.logic.red_points}")
-            if self.logic.check_game_over():
-                self.end_game()
-        else:
-            messagebox.showwarning("Invalid Move", "Cell already occupied!")
+        if not self.game_active:
+            return
+        if self._get_player_type(self.logic.current_player) != 'Human':
+            return
+        letter = self.blue_letter.get() if self.logic.current_player=='Blue' else self.red_letter.get()
+        if not self.logic.make_move(row, col, letter):
+            return
+        self._update_button(row, col, letter)
+        if self.logic.check_game_over():
+            self._end_game()
+            return
+        self.logic.switch_player()
+        self.turn_label.config(text=f"{self.logic.current_player} Player's Turn")
+        if self._get_player_type(self.logic.current_player) == 'Computer':
+            self.root.after(500, self._computer_move)
 
-    def highlight_sos(self, row, col, letter):
-        """Highlights the SOS in the turn player's color and awards points correctly."""
-        directions = [(-1, -1), (-1, 0), (-1, 1), (0, -1), (0, 1), (1, -1), (1, 0), (1, 1)]
-        player_color = "blue" if self.logic.current_player == "Blue" else "red"
-        claimed = "blue" if player_color == "red" else "red"
+    def _update_button(self, row, col, letter):
+        btn = self.buttons[row][col]
+        btn.config(text=letter)
+        sequences = self.logic.check_for_sos(row, col)
+        for seq in sequences:
+            for r,c in seq:
+                color = 'blue' if self.logic.current_player=='Blue' else 'red'
+                self.buttons[r][c].config(fg=color)
 
-        awarded_sequences = set()
+    def _computer_move(self):
+        if not self.game_active:
+            return
+        empties = [(i,j) for i in range(self.n) for j in range(self.n)
+                   if self.logic.board[i][j] == ""]
+        if not empties:
+            return
+        row, col = random.choice(empties)
+        letter = random.choice(['S','O'])
+        self.logic.make_move(row, col, letter)
+        self._update_button(row, col, letter)
+        if self.logic.check_game_over():
+            self._end_game()
+            return
+        self.logic.switch_player()
+        self.turn_label.config(text=f"{self.logic.current_player} Player's Turn")
+        if self._get_player_type(self.logic.current_player) == 'Computer':
+            self.root.after(500, self._computer_move)
 
-        for dr, dc in directions:
-            sequence = self.find_sos_sequence(row, col, dr, dc, player_color, claimed)
-            if sequence and sequence not in awarded_sequences:
-                self.highlight_sequence(sequence, player_color)
-                awarded_sequences.add(sequence)
-
-    def find_sos_sequence(self, row, col, dr, dc, player_color, claimed):
-        """Helper to find SOS sequences."""
-        first_s_row, first_s_col = row + dr, col + dc
-        second_s_row, second_s_col = row - dr, col - dc
-
-        if self.is_valid_position(first_s_row, first_s_col) and self.is_valid_position(second_s_row, second_s_col):
-            if self.is_sos_sequence(first_s_row, first_s_col, second_s_row, second_s_col, row, col, player_color, claimed):
-                return frozenset([(first_s_row, first_s_col), (second_s_row, second_s_col), (row, col)])
-        return None
-
-    def is_valid_position(self, row, col):
-        """Checks if a position is within board bounds."""
-        return 0 <= row < self.n and 0 <= col < self.n
-
-    def is_sos_sequence(self, s1_row, s1_col, s2_row, s2_col, row, col, player_color, claimed):
-        """Checks if a sequence is SOS and matches."""
-        return (
-            self.board[s1_row][s1_col] == "S"
-            and self.board[s2_row][s2_col] == "S"
-            and self.board[row][col] == "O"
-            and self.logic.current_player == claimed
-        )
-    
-    def highlight_sequence(self, sequence, player_color):
-        """Highlights the SOS sequence in color and updates it."""
-        for row, col in sequence:
-            self.buttons[row][col].config(bg=player_color)
-
-    def end_game(self):
-        """Ends the game and displays the winner."""
+    def _end_game(self):
+        self.game_active = False
         winner = self.logic.get_winner()
-        messagebox.showinfo("Game Over", f"Winner: {winner}")
+        if winner == 'Draw':
+            messagebox.showinfo("Game Over", "Game ended in a draw!")
+        else:
+            messagebox.showinfo("Game Over", f"{winner} Player Wins!")
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     root = tk.Tk()
-    game = SOSGameGUI(root)
+    app = SOSGameGUI(root)
     root.mainloop()
-    
