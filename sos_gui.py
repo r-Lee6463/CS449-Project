@@ -1,4 +1,4 @@
-"""CS449 Ryan Lee 4/17/25; Developed and tested in conjuncture with ChatGPT (o4-mini-high) following Google's Python Style Guide."""
+"""CS449 Ryan Lee 5/1/25; Developed and tested in conjuncture with ChatGPT (o4-mini-high) following Google's Python Style Guide."""
 import tkinter as tk
 from tkinter import messagebox
 from sos_logic import SOSGameLogic  # business logic separated
