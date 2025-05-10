@@ -1,8 +1,9 @@
-"""CS449 Ryan Lee 5/1/25; Developed and tested in conjuncture with ChatGPT (o4-mini-high) following Google's Python Style Guide."""
+"""CS449 Ryan Lee 5/9/25; Developed and tested in conjuncture with ChatGPT (o4-mini-high) following Google's Python Style Guide."""
 import tkinter as tk
 from tkinter import messagebox
-from sos_logic import SOSGameLogic  # business logic separated
+from sos_logic import SOSGameLogic
 import random
+from sos_ai import RandomStrategy, OllamaStrategy, SmartStrategy
 
 
 class Player:
@@ -33,6 +34,13 @@ class SOSGameGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("SOS Game")
+
+        self.strategies = {
+            'Random': RandomStrategy(),
+            'Ollama': OllamaStrategy(),
+            'Smart': SmartStrategy()
+        }
+        self.ai_type_var = tk.StringVar(value='Smart')
 
         # UI variables
         self.board_size_var = tk.IntVar(value=5)
@@ -88,6 +96,9 @@ class SOSGameGUI:
         self.right_frame.pack(side=tk.LEFT, padx=20)
         self._create_player_options(self.right_frame, "Red")
 
+        tk.Label(ctrl, text="AI Style:").pack(side=tk.LEFT, padx=(10,0))
+        tk.OptionMenu(ctrl, self.ai_type_var, *self.strategies.keys()).pack(side=tk.LEFT)
+
         # New Game button
         tk.Button(self.root, text="New Game", command=self._start_new_game).pack(pady=10)
 
@@ -138,62 +149,74 @@ class SOSGameGUI:
         """Handle a human move; ignore if not human turn or game over."""
         if not self.game_active:
             return
-        current = self.logic.current_player
-        player_obj = self.blue_player if current=='Blue' else self.red_player
+
+        player_obj = self.blue_player if self.logic.current_player == 'Blue' else self.red_player
         if not isinstance(player_obj, HumanPlayer):
             return
 
-        letter = self.blue_letter.get() if current=='Blue' else self.red_letter.get()
+        letter = self.blue_letter.get() if self.logic.current_player == 'Blue' else self.red_letter.get()
         if not self.logic.make_move(row, col, letter):
             return
 
-        # Record move
+        # Record
         if self.record_var.get():
-            self.record_moves.append((current, letter, row, col))
+            self.record_moves.append((self.logic.current_player, letter, row, col))
 
-        self._update_button(row, col)
+        # **Update the button with the letter** and highlight any SOS
+        self._update_button(row, col, letter)
+
+        # Game-over check
         if self.logic.check_game_over():
             self._end_game()
             return
 
-        # Switch turn
+        # Switch turn & possibly trigger the next player
         self.logic.switch_player()
         self.turn_label.config(text=f"{self.logic.current_player} Player's Turn")
-        next_obj = self.blue_player if self.logic.current_player=='Blue' else self.red_player
+        next_obj = self.blue_player if self.logic.current_player == 'Blue' else self.red_player
         next_obj.take_turn(self)
 
-    def _update_button(self, row, col):
+    def _update_button(self, row, col, letter):
+        """Update button text and highlight any SOS sequences."""
         btn = self.buttons[row][col]
-        letter = self.logic.board[row][col]
         btn.config(text=letter)
-        for seq in self.logic.check_for_sos(row, col):
-            for r,c in seq:
-                color = 'blue' if self.logic.current_player=='Blue' else 'red'
-                self.buttons[r][c].config(fg=color)
+        sequences = self.logic.check_for_sos(row, col)
+        player_color = 'blue' if self.logic.current_player == 'Blue' else 'red'
+        for seq in sequences:
+            for r, c in seq:
+                self.buttons[r][c].config(fg=player_color)
 
     def _computer_move(self):
-        """Perform a random move for the computer."""
+        """Perform a move for the computer."""
         if not self.game_active:
             return
-        empties = [(i,j) for i in range(self.n) for j in range(self.n)
-                   if self.logic.board[i][j]==""]
-        if not empties:
-            return
-        r,c = random.choice(empties)
-        letter = random.choice(['S','O'])
+
+        strat = self.strategies[self.ai_type_var.get()]
+        r, c, letter = strat.choose_move(
+            self.logic.board, self.n,
+            {'Blue': self.blue_letter.get(), 'Red': self.red_letter.get()},
+            self.logic.current_player
+        )
+
+        # Apply the move
         self.logic.make_move(r, c, letter)
 
-        # Record
+        # Record it (if enabled)
         if self.record_var.get():
             self.record_moves.append((self.logic.current_player, letter, r, c))
 
-        self._update_button(r, c)
+        # **Update the button with the letter** and highlight any SOS
+        self._update_button(r, c, letter)
+
+        # Check for game over
         if self.logic.check_game_over():
             self._end_game()
             return
+
+        # Switch turn & schedule next
         self.logic.switch_player()
         self.turn_label.config(text=f"{self.logic.current_player} Player's Turn")
-        next_obj = self.blue_player if self.logic.current_player=='Blue' else self.red_player
+        next_obj = self.blue_player if self.logic.current_player == 'Blue' else self.red_player
         next_obj.take_turn(self)
 
     def _end_game(self):
